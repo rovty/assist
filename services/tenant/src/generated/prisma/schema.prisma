@@ -1,0 +1,181 @@
+// Prisma schema for the Tenant Service
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Tenants ───
+model Tenant {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  slug      String       @unique
+  status    TenantStatus @default(TRIAL)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  settings     TenantSettings?
+  subscription Subscription?
+  members      TenantMember[]
+  invitations  Invitation[]
+  plans        Plan?           @relation(fields: [planId], references: [id])
+  planId       String?         @map("plan_id") @db.Uuid
+
+  @@map("tenants")
+}
+
+enum TenantStatus {
+  ACTIVE
+  TRIAL
+  SUSPENDED
+  CANCELLED
+}
+
+// ─── Tenant Settings ───
+model TenantSettings {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId String @unique @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Branding
+  logoUrl        String? @map("logo_url")
+  primaryColor   String  @default("#6366f1") @map("primary_color")
+  widgetPosition String  @default("bottom-right") @map("widget_position")
+  welcomeMessage String  @default("Hi! How can we help you today?") @map("welcome_message")
+  offlineMessage String  @default("We're currently offline. Leave a message and we'll get back to you.") @map("offline_message")
+
+  // AI Configuration
+  aiEnabled             Boolean @default(true) @map("ai_enabled")
+  aiTone                String  @default("friendly") @map("ai_tone")
+  aiConfidenceThreshold Float   @default(0.7) @map("ai_confidence_threshold")
+  aiMaxTokens           Int     @default(1024) @map("ai_max_tokens")
+  aiSystemPrompt        String? @map("ai_system_prompt")
+
+  // Widget
+  widgetEnabled      Boolean  @default(true) @map("widget_enabled")
+  allowedDomains     String[] @default([]) @map("allowed_domains")
+  preChatForm        Boolean  @default(true) @map("pre_chat_form")
+  offlineFormEnabled Boolean  @default(true) @map("offline_form_enabled")
+
+  // Notifications
+  emailOnNewConversation Boolean @default(true) @map("email_on_new_conversation")
+  emailOnEscalation      Boolean @default(true) @map("email_on_escalation")
+  pushEnabled            Boolean @default(true) @map("push_enabled")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("tenant_settings")
+}
+
+// ─── Tenant Members ───
+model TenantMember {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id") @db.Uuid
+  role      String   @default("AGENT")
+  invitedBy String?  @map("invited_by") @db.Uuid
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@map("tenant_members")
+}
+
+// ─── Invitations ───
+model Invitation {
+  id        String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String           @map("tenant_id") @db.Uuid
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email     String
+  role      String           @default("AGENT")
+  token     String           @unique
+  status    InvitationStatus @default(PENDING)
+  invitedBy String           @map("invited_by") @db.Uuid
+  expiresAt DateTime         @map("expires_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@index([token])
+  @@map("invitations")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+// ─── Plans ───
+model Plan {
+  id           String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  tier         String @unique // starter, growth, business, enterprise
+  priceMonthly Int    @map("price_monthly") // in cents
+  priceYearly  Int    @map("price_yearly") // in cents
+
+  // Limits
+  aiMessagesPerMonth Int @map("ai_messages_per_month")
+  contacts           Int
+  channels           Int
+  agents             Int
+  storageMb          Int @map("storage_mb")
+
+  // Features
+  features  String[]
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenants Tenant[]
+
+  @@map("plans")
+}
+
+// ─── Subscriptions ───
+model Subscription {
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String             @unique @map("tenant_id") @db.Uuid
+  tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stripeCustomerId     String?            @map("stripe_customer_id")
+  stripeSubscriptionId String?            @map("stripe_subscription_id")
+  status               SubscriptionStatus @default(TRIALING)
+  currentPeriodStart   DateTime?          @map("current_period_start")
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  trialEndsAt          DateTime?          @map("trial_ends_at")
+  cancelledAt          DateTime?          @map("cancelled_at")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  @@map("subscriptions")
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  UNPAID
+}
+
+// ─── Usage Tracking ───
+model UsageRecord {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  metric      String // ai_messages, contacts, storage_mb
+  count       Int
+  periodStart DateTime @map("period_start")
+  periodEnd   DateTime @map("period_end")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, metric, periodStart])
+  @@map("usage_records")
+}
