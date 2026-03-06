@@ -1,0 +1,25 @@
+{
+  "name": "@assist/shared-kafka",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@assist/shared-types": "workspace:*",
+    "@assist/shared-utils": "workspace:*",
+    "kafkajs": "^2.2.4"
+  },
+  "devDependencies": {
+    "@assist/tsconfig": "workspace:*",
+    "@assist/eslint-config": "workspace:*",
+    "@types/node": "^22.12.0",
+    "typescript": "^5.7.0"
+  }
+}
