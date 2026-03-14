@@ -1,11 +1,15 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Button, Avatar, Input } from '@assist/ui';
 import { Search, Bell, Moon, Sun } from 'lucide-react';
 import { useTheme } from '@assist/ui';
 
 export function Header() {
   const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   return (
     <header className="flex h-14 items-center justify-between border-b bg-background px-6">
@@ -22,7 +26,11 @@ export function Header() {
           size="icon"
           onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
         >
-          {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {mounted ? (
+            resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />
+          ) : (
+            <span className="h-4 w-4" />
+          )}
         </Button>
         <Button variant="ghost" size="icon">
           <Bell className="h-4 w-4" />

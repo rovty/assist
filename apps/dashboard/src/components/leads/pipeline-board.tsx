@@ -17,20 +17,24 @@ export function PipelineBoard() {
   const { data: leads, isLoading } = useLeads();
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-5 md:grid-cols-3">
       {stages.map((stage) => {
         const stageLeads = leads?.filter((l) => l.stage === stage) ?? [];
         return (
-          <div key={stage} className="w-72 shrink-0">
+          <div key={stage} className="min-w-0">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold">{stage}</h3>
               <Badge variant="secondary">{stageLeads.length}</Badge>
             </div>
-            <div className={`space-y-2 rounded-lg border p-2 ${stageColors[stage] ?? ''}`}>
+            <div className={`min-h-[200px] space-y-2 rounded-lg border p-2 ${stageColors[stage] ?? ''}`}>
               {isLoading ? (
-                <p className="p-2 text-xs text-muted-foreground">Loading…</p>
+                <div className="flex min-h-[180px] items-center justify-center">
+                  <p className="text-xs text-muted-foreground">Loading…</p>
+                </div>
               ) : stageLeads.length === 0 ? (
-                <p className="p-4 text-center text-xs text-muted-foreground">No leads</p>
+                <div className="flex min-h-[180px] items-center justify-center">
+                  <p className="text-xs text-muted-foreground">No leads</p>
+                </div>
               ) : (
                 stageLeads.map((lead) => (
                   <Card key={lead.id} className="cursor-pointer transition-shadow hover:shadow-md">

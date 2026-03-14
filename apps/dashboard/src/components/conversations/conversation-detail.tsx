@@ -10,7 +10,7 @@ interface ConversationDetailProps {
 const mockMessages = [
   { id: '1', sender: 'contact', text: 'Hi, I need help with my order', time: '10:30 AM' },
   { id: '2', sender: 'agent', text: 'Of course! Can you share your order number?', time: '10:31 AM' },
-  { id: '3', sender: 'contact', text: 'It's ORD-12345', time: '10:32 AM' },
+  { id: '3', sender: 'contact', text: "It's ORD-12345", time: '10:32 AM' },
 ];
 
 export function ConversationDetail({ conversationId }: ConversationDetailProps) {

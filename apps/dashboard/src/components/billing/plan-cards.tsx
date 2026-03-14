@@ -29,11 +29,15 @@ export function PlanCards() {
   return (
     <div className="grid gap-4 md:grid-cols-3">
       {plans.map((plan) => (
-        <Card key={plan.name} className={plan.popular ? 'border-primary shadow-md' : ''}>
+        <Card key={plan.name} className={plan.popular ? 'border-2 border-primary ring-1 ring-primary/20' : ''}>
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>{plan.name}</CardTitle>
-              {plan.popular && <Badge>Popular</Badge>}
+              {plan.popular && (
+                <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20">
+                  Popular
+                </span>
+              )}
             </div>
             <CardDescription>{plan.description}</CardDescription>
           </CardHeader>

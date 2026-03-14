@@ -7,14 +7,22 @@
     "dev": "vite --port 3200",
     "build": "tsc && vite build",
     "preview": "vite preview --port 3200",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ci": "vitest run --reporter=junit --outputFile=test-results.xml"
   },
   "dependencies": {
     "preact": "^10.25.0"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.9.0",
+    "@testing-library/jest-dom": "^6.6.0",
+    "@testing-library/preact": "^3.2.0",
+    "@testing-library/user-event": "^14.5.0",
+    "jsdom": "^25.0.0",
     "typescript": "^5.8.3",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
   }
 }

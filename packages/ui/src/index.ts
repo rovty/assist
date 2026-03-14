@@ -1,9 +1,9 @@
 // Components
-export { Button, type ButtonProps, buttonVariants } from './components/button.js';
-export { Input } from './components/input.js';
-export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from './components/card.js';
-export { Badge, badgeVariants } from './components/badge.js';
-export { Avatar } from './components/avatar.js';
+export { Button, type ButtonProps, buttonVariants } from './components/button';
+export { Input } from './components/input';
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from './components/card';
+export { Badge, badgeVariants } from './components/badge';
+export { Avatar } from './components/avatar';
 export {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ export {
   DialogFooter,
   DialogTitle,
   DialogDescription,
-} from './components/dialog.js';
+} from './components/dialog';
 export {
   Table,
   TableHeader,
@@ -21,11 +21,11 @@ export {
   TableRow,
   TableCell,
   TableCaption,
-} from './components/table.js';
-export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/tabs.js';
-export { ToastProvider, useToast, type Toast } from './components/toast.js';
-export { Skeleton } from './components/skeleton.js';
-export { ThemeProvider, useTheme } from './components/theme-provider.js';
+} from './components/table';
+export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/tabs';
+export { ToastProvider, useToast, type Toast } from './components/toast';
+export { Skeleton } from './components/skeleton';
+export { ThemeProvider, useTheme } from './components/theme-provider';
 
 // Utilities
-export { cn } from './lib/utils.js';
+export { cn } from './lib/utils';
