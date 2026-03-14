@@ -12,6 +12,7 @@ import {
   Settings,
   CreditCard,
   LayoutDashboard,
+  Building2,
 } from 'lucide-react';
 
 const navItems = [
@@ -57,6 +58,18 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      <div className="border-t px-4 py-3">
+        <Link href="/settings" className="flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-muted">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10">
+            <Building2 className="h-4 w-4 text-primary" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">Acme Inc</p>
+            <p className="truncate text-xs text-muted-foreground">Pro Plan</p>
+          </div>
+        </Link>
+      </div>
     </aside>
   );
 }

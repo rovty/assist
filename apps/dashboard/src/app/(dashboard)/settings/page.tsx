@@ -1,10 +1,109 @@
 'use client';
 
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@assist/ui';
 import { Card, CardContent, CardHeader, CardTitle, Input, Button } from '@assist/ui';
-import { Settings2, Users, Radio, Puzzle, UserPlus, Save } from 'lucide-react';
+import { Settings2, Users, Radio, Puzzle, UserPlus, Save, ChevronsUpDown, Check } from 'lucide-react';
+
+const timezones = Intl.supportedValuesOf('timeZone');
+
+function TimezoneSelect({ value, onChange }: { value: string; onChange: (tz: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [highlighted, setHighlighted] = useState(-1);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const filtered = useMemo(
+    () => timezones.filter((tz) => tz.toLowerCase().includes(search.toLowerCase())),
+    [search],
+  );
+
+  useEffect(() => { setHighlighted(-1); }, [search]);
+
+  const select = useCallback((tz: string) => {
+    onChange(tz);
+    setOpen(false);
+    setSearch('');
+    setHighlighted(-1);
+  }, [onChange]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!open) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlighted((prev) => {
+        const next = prev < filtered.length - 1 ? prev + 1 : 0;
+        listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' });
+        return next;
+      });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlighted((prev) => {
+        const next = prev > 0 ? prev - 1 : filtered.length - 1;
+        listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' });
+        return next;
+      });
+    } else if (e.key === 'Enter' && highlighted >= 0 && highlighted < filtered.length) {
+      e.preventDefault();
+      select(filtered[highlighted]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setOpen(false);
+      setSearch('');
+      setHighlighted(-1);
+    }
+  }, [open, filtered, highlighted, select]);
+
+  return (
+    <div className="relative" onKeyDown={handleKeyDown}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+      >
+        <span className={value ? '' : 'text-muted-foreground'}>{value || 'Select timezone…'}</span>
+        <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg">
+          <div className="p-2">
+            <Input
+              placeholder="Search timezones…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <div ref={listRef} className="max-h-60 overflow-y-auto px-1 pb-1">
+            {filtered.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">No timezone found</p>
+            ) : (
+              filtered.map((tz, i) => (
+                <button
+                  key={tz}
+                  type="button"
+                  onClick={() => select(tz)}
+                  className={`flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm ${
+                    i === highlighted
+                      ? 'bg-accent text-accent-foreground'
+                      : 'hover:bg-accent hover:text-accent-foreground'
+                  }`}
+                >
+                  <Check className={`h-4 w-4 shrink-0 ${tz === value ? 'opacity-100' : 'opacity-0'}`} />
+                  {tz}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function SettingsPage() {
+  const [timezone, setTimezone] = useState('UTC');
+
   return (
     <div className="space-y-6">
       <div>
@@ -48,7 +147,7 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Timezone</label>
-                <Input defaultValue="UTC" />
+                <TimezoneSelect value={timezone} onChange={setTimezone} />
               </div>
               <Button>
                 <Save className="h-4 w-4 shrink-0" />
