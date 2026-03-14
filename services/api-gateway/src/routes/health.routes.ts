@@ -18,6 +18,11 @@ export async function healthRoutes(app: FastifyInstance) {
       { name: 'conversation', url: `${process.env['CONVERSATION_SERVICE_URL'] ?? 'http://localhost:3003'}/health` },
       { name: 'ai-engine', url: `${process.env['AI_SERVICE_URL'] ?? 'http://localhost:3004'}/health` },
       { name: 'notification', url: `${process.env['NOTIFICATION_SERVICE_URL'] ?? 'http://localhost:3005'}/health` },
+      { name: 'knowledge-base', url: `${process.env['KNOWLEDGE_BASE_SERVICE_URL'] ?? 'http://localhost:3006'}/health` },
+      { name: 'media', url: `${process.env['MEDIA_SERVICE_URL'] ?? 'http://localhost:3007'}/health` },
+      { name: 'channel-gateway', url: `${process.env['CHANNEL_GATEWAY_SERVICE_URL'] ?? 'http://localhost:3008'}/health` },
+      { name: 'analytics', url: `${process.env['ANALYTICS_SERVICE_URL'] ?? 'http://localhost:3009'}/health` },
+      { name: 'webhook', url: `${process.env['WEBHOOK_SERVICE_URL'] ?? 'http://localhost:3010'}/health` },
     ];
 
     for (const svc of services) {

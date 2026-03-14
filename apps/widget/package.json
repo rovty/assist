@@ -1,0 +1,20 @@
+{
+  "name": "@assist/widget",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3200",
+    "build": "tsc && vite build",
+    "preview": "vite preview --port 3200",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "preact": "^10.25.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.9.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.0.0"
+  }
+}

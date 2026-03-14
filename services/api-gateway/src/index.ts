@@ -92,6 +92,16 @@ async function buildServer() {
   await registerProxy(app, { upstream: env.CONVERSATION_SERVICE_URL, prefix: '/contacts' });
   await registerProxy(app, { upstream: env.AI_SERVICE_URL, prefix: '/ai' });
   await registerProxy(app, { upstream: env.NOTIFICATION_SERVICE_URL, prefix: '/notifications' });
+  await registerProxy(app, { upstream: env.KNOWLEDGE_BASE_SERVICE_URL, prefix: '/kb' });
+  await registerProxy(app, { upstream: env.MEDIA_SERVICE_URL, prefix: '/media' });
+  await registerProxy(app, { upstream: env.CHANNEL_GATEWAY_SERVICE_URL, prefix: '/channels' });
+  await registerProxy(app, { upstream: env.ANALYTICS_SERVICE_URL, prefix: '/analytics' });
+  await registerProxy(app, { upstream: env.WEBHOOK_SERVICE_URL, prefix: '/webhooks' });
+  await registerProxy(app, { upstream: env.BOT_BUILDER_SERVICE_URL, prefix: '/bots' });
+  await registerProxy(app, { upstream: env.LEAD_CRM_SERVICE_URL, prefix: '/leads' });
+  await registerProxy(app, { upstream: env.SCHEDULER_SERVICE_URL, prefix: '/scheduler' });
+  await registerProxy(app, { upstream: env.AGENT_WORKSPACE_SERVICE_URL, prefix: '/workspace' });
+  await registerProxy(app, { upstream: env.BILLING_SERVICE_URL, prefix: '/billing' });
 
   return app;
 }
@@ -108,6 +118,16 @@ async function start() {
     logger.info(`  /conversations, /contacts → ${env.CONVERSATION_SERVICE_URL}`);
     logger.info(`  /ai                      → ${env.AI_SERVICE_URL}`);
     logger.info(`  /notifications           → ${env.NOTIFICATION_SERVICE_URL}`);
+    logger.info(`  /kb                      → ${env.KNOWLEDGE_BASE_SERVICE_URL}`);
+    logger.info(`  /media                   → ${env.MEDIA_SERVICE_URL}`);
+    logger.info(`  /channels                → ${env.CHANNEL_GATEWAY_SERVICE_URL}`);
+    logger.info(`  /analytics               → ${env.ANALYTICS_SERVICE_URL}`);
+    logger.info(`  /webhooks                → ${env.WEBHOOK_SERVICE_URL}`);
+    logger.info(`  /bots                    → ${env.BOT_BUILDER_SERVICE_URL}`);
+    logger.info(`  /leads                   → ${env.LEAD_CRM_SERVICE_URL}`);
+    logger.info(`  /scheduler               → ${env.SCHEDULER_SERVICE_URL}`);
+    logger.info(`  /workspace               → ${env.AGENT_WORKSPACE_SERVICE_URL}`);
+    logger.info(`  /billing                 → ${env.BILLING_SERVICE_URL}`);
   } catch (err) {
     logger.fatal(err, 'Failed to start API Gateway');
     process.exit(1);
