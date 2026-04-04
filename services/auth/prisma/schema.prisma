@@ -17,7 +17,7 @@ datasource db {
 model User {
   id             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email          String     @unique @db.Citext
-  passwordHash   String     @map("password_hash")
+  passwordHash   String?    @map("password_hash")
   name           String
   role           UserRole   @default(AGENT)
   status         UserStatus @default(PENDING)
@@ -32,6 +32,7 @@ model User {
   // Relations
   tenantId       String     @map("tenant_id") @db.Uuid
   tenant         Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  authIdentities AuthIdentity[]
   refreshTokens  RefreshToken[]
   apiKeys        ApiKey[]
 
@@ -63,10 +64,58 @@ model Tenant {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  users     User[]
-  apiKeys   ApiKey[]
+  users          User[]
+  apiKeys        ApiKey[]
+  ssoConnections SsoConnection[]
 
   @@map("tenants")
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  MICROSOFT
+  SSO
+  OIDC
+  SAML
+  UNKNOWN
+}
+
+model AuthIdentity {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  supabaseUserId String       @map("supabase_user_id")
+  provider       AuthProvider @default(UNKNOWN)
+  providerUserId String?      @map("provider_user_id")
+  email          String?      @db.Citext
+  lastUsedAt     DateTime?    @map("last_used_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+  @@index([supabaseUserId])
+  @@map("auth_identities")
+}
+
+model SsoConnection {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String       @map("tenant_id") @db.Uuid
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider        AuthProvider
+  domain          String?
+  displayName     String?      @map("display_name")
+  oidcIssuer      String?      @map("oidc_issuer")
+  clientId        String?      @map("client_id")
+  metadataUrl     String?      @map("metadata_url")
+  enabled         Boolean      @default(false)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@index([domain])
+  @@map("sso_connections")
 }
 
 // ─── Refresh Tokens ───

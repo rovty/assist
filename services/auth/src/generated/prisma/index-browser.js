@@ -146,6 +146,32 @@ exports.Prisma.TenantScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.AuthIdentityScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  supabaseUserId: 'supabaseUserId',
+  provider: 'provider',
+  providerUserId: 'providerUserId',
+  email: 'email',
+  lastUsedAt: 'lastUsedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.SsoConnectionScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  provider: 'provider',
+  domain: 'domain',
+  displayName: 'displayName',
+  oidcIssuer: 'oidcIssuer',
+  clientId: 'clientId',
+  metadataUrl: 'metadataUrl',
+  enabled: 'enabled',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.RefreshTokenScalarFieldEnum = {
   id: 'id',
   token: 'token',
@@ -223,9 +249,21 @@ exports.UserStatus = exports.$Enums.UserStatus = {
   SUSPENDED: 'SUSPENDED'
 };
 
+exports.AuthProvider = exports.$Enums.AuthProvider = {
+  EMAIL: 'EMAIL',
+  GOOGLE: 'GOOGLE',
+  MICROSOFT: 'MICROSOFT',
+  SSO: 'SSO',
+  OIDC: 'OIDC',
+  SAML: 'SAML',
+  UNKNOWN: 'UNKNOWN'
+};
+
 exports.Prisma.ModelName = {
   User: 'User',
   Tenant: 'Tenant',
+  AuthIdentity: 'AuthIdentity',
+  SsoConnection: 'SsoConnection',
   RefreshToken: 'RefreshToken',
   ApiKey: 'ApiKey',
   AuditLog: 'AuditLog'

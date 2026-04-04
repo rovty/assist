@@ -10,7 +10,7 @@ const statusColors: Record<string, 'success' | 'secondary' | 'warning'> = {
   paused: 'warning',
 };
 
-export function BotList() {
+export function BotList({ canManage = false }: { canManage?: boolean }) {
   const { data: bots, isLoading } = useBots();
 
   if (isLoading) {
@@ -47,7 +47,7 @@ export function BotList() {
           <CardContent>
             <div className="flex items-center justify-between text-sm text-muted-foreground">
               <span>{bot.conversations} conversations</span>
-              <Button variant="ghost" size="sm">Edit</Button>
+              <Button variant="ghost" size="sm">{canManage ? 'Edit' : 'View'}</Button>
             </div>
           </CardContent>
         </Card>

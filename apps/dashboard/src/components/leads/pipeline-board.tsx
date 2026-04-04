@@ -13,7 +13,7 @@ const stageColors: Record<string, string> = {
   Won: 'bg-green-50 border-green-200 dark:bg-green-950',
 };
 
-export function PipelineBoard() {
+export function PipelineBoard({ readOnly = false }: { readOnly?: boolean }) {
   const { data: leads, isLoading } = useLeads();
 
   return (
@@ -37,7 +37,7 @@ export function PipelineBoard() {
                 </div>
               ) : (
                 stageLeads.map((lead) => (
-                  <Card key={lead.id} className="cursor-pointer transition-shadow hover:shadow-md">
+                  <Card key={lead.id} className={readOnly ? 'transition-shadow' : 'cursor-pointer transition-shadow hover:shadow-md'}>
                     <CardContent className="flex items-center gap-3 p-3">
                       <Avatar name={lead.name} size="sm" />
                       <div className="flex-1 overflow-hidden">

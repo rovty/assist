@@ -5,6 +5,7 @@ import { MessageInput } from './message-input';
 
 interface ConversationDetailProps {
   conversationId: string;
+  canReply?: boolean;
 }
 
 const mockMessages = [
@@ -13,7 +14,7 @@ const mockMessages = [
   { id: '3', sender: 'contact', text: "It's ORD-12345", time: '10:32 AM' },
 ];
 
-export function ConversationDetail({ conversationId }: ConversationDetailProps) {
+export function ConversationDetail({ conversationId, canReply = true }: ConversationDetailProps) {
   return (
     <Card className="flex h-full flex-col">
       <CardHeader className="flex flex-row items-center gap-3 border-b">
@@ -48,7 +49,7 @@ export function ConversationDetail({ conversationId }: ConversationDetailProps) 
       </CardContent>
 
       <div className="border-t p-4">
-        <MessageInput conversationId={conversationId} />
+        <MessageInput conversationId={conversationId} readOnly={!canReply} />
       </div>
     </Card>
   );

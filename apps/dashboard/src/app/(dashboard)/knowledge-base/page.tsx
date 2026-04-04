@@ -3,6 +3,9 @@
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Badge } from '@assist/ui';
 import { Plus, Search, FileText, Globe } from 'lucide-react';
 
+import { AccessDeniedState } from '@/components/auth/access-denied-state';
+import { useAuthorization } from '@/hooks/use-authorization';
+
 const sources = [
   { id: '1', name: 'Help Center Articles', type: 'web', documents: 142, status: 'synced' },
   { id: '2', name: 'Product Documentation', type: 'file', documents: 86, status: 'synced' },
@@ -10,6 +13,19 @@ const sources = [
 ];
 
 export default function KnowledgeBasePage() {
+  const { can } = useAuthorization();
+
+  if (!can('knowledge-base:view')) {
+    return (
+      <AccessDeniedState
+        title="Knowledge base access is restricted"
+        description="Your role does not include knowledge source visibility. Ask an owner or admin if you should access AI content."
+      />
+    );
+  }
+
+  const canManageKnowledgeBase = can('knowledge-base:manage');
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -17,10 +33,14 @@ export default function KnowledgeBasePage() {
           <h1 className="text-3xl font-bold tracking-tight">Knowledge Base</h1>
           <p className="mt-1 text-sm text-muted-foreground">Manage AI knowledge sources for bot responses</p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 shrink-0" />
-          Add Source
-        </Button>
+        {canManageKnowledgeBase ? (
+          <Button>
+            <Plus className="h-4 w-4 shrink-0" />
+            Add Source
+          </Button>
+        ) : (
+          <Badge variant="outline">Read-only</Badge>
+        )}
       </div>
 
       <Card>
@@ -60,8 +80,8 @@ export default function KnowledgeBasePage() {
                   <span className={`h-1.5 w-1.5 rounded-full ${source.status === 'synced' ? 'bg-green-500' : 'bg-yellow-500'}`} />
                   {source.status === 'synced' ? 'Synced' : 'Syncing…'}
                 </Badge>
-                <Button variant="ghost" size="sm" className="text-xs">
-                  Manage
+                <Button variant="ghost" size="sm" className="text-xs" disabled={!canManageKnowledgeBase}>
+                  {canManageKnowledgeBase ? 'Manage' : 'View'}
                 </Button>
               </div>
             </CardContent>

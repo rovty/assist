@@ -1,11 +1,25 @@
 'use client';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@assist/ui';
-import { OverviewCards } from '@/components/analytics/overview-cards';
-import { ChartContainer } from '@/components/analytics/chart-container';
 import { MessageSquare, Users, Bot, ThumbsUp } from 'lucide-react';
 
+import { OverviewCards } from '@/components/analytics/overview-cards';
+import { ChartContainer } from '@/components/analytics/chart-container';
+import { AccessDeniedState } from '@/components/auth/access-denied-state';
+import { useAuthorization } from '@/hooks/use-authorization';
+
 export default function AnalyticsPage() {
+  const { can } = useAuthorization();
+
+  if (!can('analytics:view')) {
+    return (
+      <AccessDeniedState
+        title="Analytics access is restricted"
+        description="Your role cannot open analytics reporting. Ask an owner or admin if you need reporting visibility."
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>

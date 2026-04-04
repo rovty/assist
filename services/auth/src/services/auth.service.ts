@@ -1,43 +1,246 @@
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import crypto from 'node:crypto';
+import type { JWTPayload } from 'jose';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
-import { createLogger, ConflictError, UnauthorizedError, NotFoundError, BadRequestError } from '@assist/shared-utils';
-import type { JwtPayload } from '@assist/shared-types';
+import { createLogger, NotFoundError, UnauthorizedError } from '@assist/shared-utils';
+import type { JwtPayload, UserRole, UserStatus } from '@assist/shared-types';
 
 import { prisma } from '../utils/db.js';
 import { redis } from '../utils/redis.js';
 import { env } from '../env.js';
-import type { RegisterInput, LoginInput } from '../schemas/auth.schema.js';
 
 const logger = createLogger('auth-service');
 
+const ALL_PERMISSIONS = [
+  'dashboard:read',
+  'conversations:read',
+  'conversations:write',
+  'contacts:read',
+  'contacts:write',
+  'bots:read',
+  'bots:write',
+  'knowledge-base:read',
+  'knowledge-base:write',
+  'analytics:read',
+  'webhooks:manage',
+  'channels:manage',
+  'billing:read',
+  'billing:manage',
+  'settings:read',
+  'settings:write',
+  'team:manage',
+] as const;
+
+const ROLE_PERMISSIONS: Record<string, string[]> = {
+  OWNER: [...ALL_PERMISSIONS],
+  ADMIN: ALL_PERMISSIONS.filter((permission) => permission !== 'billing:manage'),
+  AGENT: ['dashboard:read', 'conversations:read', 'conversations:write', 'contacts:read', 'knowledge-base:read'],
+  VIEWER: ['dashboard:read', 'conversations:read', 'contacts:read', 'analytics:read', 'knowledge-base:read'],
+};
+
+interface SupabaseAppMetadata {
+  provider?: string;
+  providers?: string[];
+}
+
+interface SupabaseUserMetadata {
+  name?: string;
+  full_name?: string;
+  workspaceName?: string;
+  tenantName?: string;
+  organizationName?: string;
+  avatar_url?: string;
+  picture?: string;
+}
+
+interface SupabaseClaims extends JWTPayload {
+  sub: string;
+  email?: string;
+  email_verified?: boolean | string;
+  email_confirmed_at?: string;
+  app_metadata?: SupabaseAppMetadata;
+  user_metadata?: SupabaseUserMetadata;
+}
+
+const jwks = createRemoteJWKSet(new URL(env.SUPABASE_JWKS_URL));
+
 export class AuthService {
-  /**
-   * Register a new user and create their tenant (workspace).
-   * This is the primary onboarding flow.
-   */
-  async register(input: RegisterInput) {
-    const { email, password, name, tenantName } = input;
+  async resolveAuthContext(token: string): Promise<JwtPayload> {
+    const blacklisted = await redis.get(`bl:${token}`);
+    if (blacklisted) {
+      throw new UnauthorizedError('Token has been revoked');
+    }
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const claims = await this.verifySupabaseToken(token);
+    const user = await this.resolveOrProvisionUser(claims);
+
+    return {
+      sub: user.id,
+      tenantId: user.tenantId,
+      email: user.email,
+      role: user.role as UserRole,
+      supabaseUserId: claims.sub,
+      provider: this.mapProviderLabel(claims.app_metadata?.provider),
+      permissions: this.getPermissions(user.role),
+      iat: typeof claims.iat === 'number' ? claims.iat : Math.floor(Date.now() / 1000),
+      exp: typeof claims.exp === 'number' ? claims.exp : Math.floor(Date.now() / 1000) + 3600,
+    };
+  }
+
+  async verifyAccessToken(token: string): Promise<JwtPayload> {
+    return this.resolveAuthContext(token);
+  }
+
+  async logout(userId: string, accessToken?: string) {
+    if (accessToken) {
+      const claims = await this.verifySupabaseToken(accessToken);
+      if (typeof claims.exp === 'number') {
+        const ttl = claims.exp - Math.floor(Date.now() / 1000);
+        if (ttl > 0) {
+          await redis.setex(`bl:${accessToken}`, ttl, '1');
+        }
+      }
+    }
+
+    logger.info({ userId }, 'User logged out');
+  }
+
+  async getProfile(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { tenant: true, authIdentities: true },
+    });
+
+    if (!user) {
+      throw new NotFoundError('User', userId);
+    }
+
+    return {
+      user: this.sanitizeUser(user),
+      tenant: { id: user.tenant.id, name: user.tenant.name, slug: user.tenant.slug },
+      authorization: {
+        tenantId: user.tenantId,
+        role: user.role,
+        permissions: this.getPermissions(user.role),
+      },
+      identities: user.authIdentities.map((identity) => ({
+        id: identity.id,
+        provider: identity.provider,
+        email: identity.email,
+        supabaseUserId: identity.supabaseUserId,
+        lastUsedAt: identity.lastUsedAt,
+      })),
+    };
+  }
+
+  private async verifySupabaseToken(token: string): Promise<SupabaseClaims> {
+    try {
+      const { payload } = await jwtVerify(token, jwks, {
+        issuer: env.SUPABASE_JWT_ISSUER,
+        audience: env.SUPABASE_JWT_AUDIENCE,
+      });
+
+      if (!payload.sub) {
+        throw new UnauthorizedError('Invalid Supabase token');
+      }
+
+      return payload as SupabaseClaims;
+    } catch (error) {
+      logger.warn(
+        {
+          err: error,
+          issuer: env.SUPABASE_JWT_ISSUER,
+          audience: env.SUPABASE_JWT_AUDIENCE,
+        },
+        'Failed to verify Supabase token',
+      );
+      throw new UnauthorizedError('Invalid or expired token');
+    }
+  }
+
+  private async resolveOrProvisionUser(claims: SupabaseClaims) {
+    const now = new Date();
+    const email = claims.email?.trim().toLowerCase();
+    const emailVerified = this.isEmailVerified(claims);
+
+    if (!email) {
+      throw new UnauthorizedError('Supabase token does not include an email address');
+    }
+
+    const provider = this.mapProviderEnum(claims.app_metadata?.provider);
+    const providerUserId = claims.sub;
+
+    const existingProviderIdentity = await prisma.authIdentity.findUnique({
+      where: { provider_providerUserId: { provider, providerUserId } },
+      include: { user: { include: { tenant: true, authIdentities: true } } },
+    });
+
+    if (existingProviderIdentity) {
+      await this.touchIdentity(existingProviderIdentity.user.id, existingProviderIdentity.id, claims, now);
+      return this.getUserWithRelations(existingProviderIdentity.user.id);
+    }
+
+    const linkedSupabaseIdentity = await prisma.authIdentity.findFirst({
+      where: { supabaseUserId: claims.sub },
+      include: { user: { include: { tenant: true, authIdentities: true } } },
+    });
+
+    if (linkedSupabaseIdentity) {
+      await prisma.authIdentity.create({
+        data: {
+          userId: linkedSupabaseIdentity.user.id,
+          supabaseUserId: claims.sub,
+          provider,
+          providerUserId,
+          email,
+          lastUsedAt: now,
+        },
+      });
+
+      await this.touchUser(linkedSupabaseIdentity.user.id, claims, now);
+      return this.getUserWithRelations(linkedSupabaseIdentity.user.id);
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      include: { tenant: true, authIdentities: true },
+    });
+
     if (existingUser) {
-      throw new ConflictError('A user with this email already exists');
+      await prisma.$transaction([
+        prisma.authIdentity.create({
+          data: {
+            userId: existingUser.id,
+            supabaseUserId: claims.sub,
+            provider,
+            providerUserId,
+            email,
+            lastUsedAt: now,
+          },
+        }),
+        prisma.user.update({
+          where: { id: existingUser.id },
+          data: this.userUpdateDataFromClaims(claims, now),
+        }),
+      ]);
+
+      logger.info(
+        { userId: existingUser.id, provider, email, emailVerified },
+        'Linked Supabase identity to existing local user',
+      );
+      return this.getUserWithRelations(existingUser.id);
     }
 
-    // Generate slug from tenant name
-    const slug = this.generateSlug(tenantName);
-    const existingTenant = await prisma.tenant.findUnique({ where: { slug } });
-    if (existingTenant) {
-      throw new ConflictError('A workspace with this name already exists');
-    }
+    logger.info(
+      { email, provider, emailVerified, supabaseUserId: claims.sub },
+      'No local user found for Supabase identity, provisioning owner workspace',
+    );
 
-    // Hash password
-    const passwordHash = await bcrypt.hash(password, env.BCRYPT_ROUNDS);
+    const tenantName = this.deriveTenantName(claims, email);
+    const slug = await this.generateUniqueSlug(tenantName);
+    const displayName = this.deriveDisplayName(claims, email);
+    const avatarUrl = this.deriveAvatarUrl(claims);
 
-    // Create tenant + user in a transaction
-    const result = await prisma.$transaction(async (tx) => {
+    const createdUser = await prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
         data: {
           name: tenantName,
@@ -48,271 +251,185 @@ export class AuthService {
       const user = await tx.user.create({
         data: {
           email,
-          passwordHash,
-          name,
+          passwordHash: null,
+          name: displayName,
           role: 'OWNER',
           status: 'ACTIVE',
-          emailVerified: false,
+          avatarUrl,
+          emailVerified,
+          lastLoginAt: now,
           tenantId: tenant.id,
         },
       });
 
-      return { tenant, user };
-    });
-
-    // Generate tokens
-    const tokens = await this.generateTokens(result.user.id, result.tenant.id, result.user.email, result.user.role);
-
-    logger.info({ userId: result.user.id, tenantId: result.tenant.id }, 'User registered');
-
-    return {
-      user: this.sanitizeUser(result.user),
-      tenant: { id: result.tenant.id, name: result.tenant.name, slug: result.tenant.slug },
-      ...tokens,
-    };
-  }
-
-  /**
-   * Authenticate a user with email and password
-   */
-  async login(input: LoginInput, meta?: { ip?: string; userAgent?: string }) {
-    const { email, password } = input;
-
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: { tenant: true },
-    });
-
-    if (!user) {
-      throw new UnauthorizedError('Invalid email or password');
-    }
-
-    if (user.status !== 'ACTIVE') {
-      throw new UnauthorizedError('Account is not active. Please contact support.');
-    }
-
-    // Verify password
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      throw new UnauthorizedError('Invalid email or password');
-    }
-
-    // Generate tokens
-    const tokens = await this.generateTokens(user.id, user.tenantId, user.email, user.role);
-
-    // Store refresh token
-    await prisma.refreshToken.create({
-      data: {
-        token: tokens.refreshToken,
-        userId: user.id,
-        expiresAt: new Date(Date.now() + this.parseExpiry(env.REFRESH_TOKEN_EXPIRY)),
-        userAgent: meta?.userAgent,
-        ipAddress: meta?.ip,
-      },
-    });
-
-    // Update last login
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
-
-    logger.info({ userId: user.id }, 'User logged in');
-
-    return {
-      user: this.sanitizeUser(user),
-      tenant: { id: user.tenant.id, name: user.tenant.name, slug: user.tenant.slug },
-      ...tokens,
-    };
-  }
-
-  /**
-   * Refresh an access token using a refresh token
-   */
-  async refreshAccessToken(refreshToken: string) {
-    const storedToken = await prisma.refreshToken.findUnique({
-      where: { token: refreshToken },
-      include: { user: { include: { tenant: true } } },
-    });
-
-    if (!storedToken || storedToken.revokedAt || storedToken.expiresAt < new Date()) {
-      throw new UnauthorizedError('Invalid or expired refresh token');
-    }
-
-    // Rotate: revoke old token, create new one
-    const tokens = await this.generateTokens(
-      storedToken.user.id,
-      storedToken.user.tenantId,
-      storedToken.user.email,
-      storedToken.user.role,
-    );
-
-    await prisma.$transaction([
-      prisma.refreshToken.update({
-        where: { id: storedToken.id },
-        data: { revokedAt: new Date() },
-      }),
-      prisma.refreshToken.create({
+      await tx.authIdentity.create({
         data: {
-          token: tokens.refreshToken,
-          userId: storedToken.userId,
-          expiresAt: new Date(Date.now() + this.parseExpiry(env.REFRESH_TOKEN_EXPIRY)),
-          userAgent: storedToken.userAgent,
-          ipAddress: storedToken.ipAddress,
+          userId: user.id,
+          supabaseUserId: claims.sub,
+          provider,
+          providerUserId,
+          email,
+          lastUsedAt: now,
+        },
+      });
+
+      logger.info({ userId: user.id, tenantId: tenant.id, provider, email }, 'Provisioned local user from Supabase identity');
+      return user;
+    });
+
+    return this.getUserWithRelations(createdUser.id);
+  }
+
+  private async touchIdentity(userId: string, identityId: string, claims: SupabaseClaims, now: Date) {
+    await prisma.$transaction([
+      prisma.authIdentity.update({
+        where: { id: identityId },
+        data: {
+          email: claims.email?.trim().toLowerCase(),
+          lastUsedAt: now,
         },
       }),
+      prisma.user.update({
+        where: { id: userId },
+        data: this.userUpdateDataFromClaims(claims, now),
+      }),
     ]);
-
-    return {
-      user: this.sanitizeUser(storedToken.user),
-      ...tokens,
-    };
   }
 
-  /**
-   * Logout — revoke a refresh token and blacklist the access token
-   */
-  async logout(userId: string, refreshToken?: string, accessToken?: string) {
-    if (refreshToken) {
-      await prisma.refreshToken.updateMany({
-        where: { token: refreshToken, userId },
-        data: { revokedAt: new Date() },
-      });
-    }
-
-    // Blacklist the access token in Redis until it expires
-    if (accessToken) {
-      try {
-        const decoded = jwt.decode(accessToken) as JwtPayload | null;
-        if (decoded?.exp) {
-          const ttl = decoded.exp - Math.floor(Date.now() / 1000);
-          if (ttl > 0) {
-            await redis.setex(`bl:${accessToken}`, ttl, '1');
-          }
-        }
-      } catch {
-        // Ignore decode errors
-      }
-    }
-
-    logger.info({ userId }, 'User logged out');
-  }
-
-  /**
-   * Verify a JWT access token
-   */
-  async verifyAccessToken(token: string): Promise<JwtPayload> {
-    // Check blacklist
-    const blacklisted = await redis.get(`bl:${token}`);
-    if (blacklisted) {
-      throw new UnauthorizedError('Token has been revoked');
-    }
-
-    try {
-      const payload = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
-      return payload;
-    } catch {
-      throw new UnauthorizedError('Invalid or expired token');
-    }
-  }
-
-  /**
-   * Get user profile
-   */
-  async getProfile(userId: string) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { tenant: true },
-    });
-
-    if (!user) {
-      throw new NotFoundError('User', userId);
-    }
-
-    return {
-      user: this.sanitizeUser(user),
-      tenant: { id: user.tenant.id, name: user.tenant.name, slug: user.tenant.slug },
-    };
-  }
-
-  /**
-   * Change password
-   */
-  async changePassword(userId: string, currentPassword: string, newPassword: string) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundError('User', userId);
-    }
-
-    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!valid) {
-      throw new BadRequestError('Current password is incorrect');
-    }
-
-    const passwordHash = await bcrypt.hash(newPassword, env.BCRYPT_ROUNDS);
+  private async touchUser(userId: string, claims: SupabaseClaims, now: Date) {
     await prisma.user.update({
       where: { id: userId },
-      data: { passwordHash },
+      data: this.userUpdateDataFromClaims(claims, now),
     });
-
-    // Revoke all refresh tokens (force re-login)
-    await prisma.refreshToken.updateMany({
-      where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-
-    logger.info({ userId }, 'Password changed');
   }
 
-  // ─── Private helpers ───
-
-  private async generateTokens(userId: string, tenantId: string, email: string, role: string) {
-    const payload = { sub: userId, tenantId, email, role };
-    const accessToken = jwt.sign(
-      payload,
-      env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRY } as jwt.SignOptions,
-    );
-
-    const refreshToken = crypto.randomBytes(64).toString('hex');
-
-    return { accessToken, refreshToken };
+  private userUpdateDataFromClaims(claims: SupabaseClaims, now: Date) {
+    return {
+      name: this.deriveDisplayName(claims, claims.email ?? ''),
+      avatarUrl: this.deriveAvatarUrl(claims),
+      emailVerified: this.isEmailVerified(claims),
+      status: 'ACTIVE',
+      lastLoginAt: now,
+    } as const;
   }
 
-  private sanitizeUser(user: { id: string; email: string; name: string; role: string; status: string; avatarUrl: string | null; lastLoginAt: Date | null; createdAt: Date }) {
+  private isEmailVerified(claims: SupabaseClaims): boolean {
+    return claims.email_verified === true
+      || claims.email_verified === 'true'
+      || typeof claims.email_confirmed_at === 'string';
+  }
+
+  private async getUserWithRelations(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { tenant: true, authIdentities: true },
+    });
+
+    if (!user) {
+      throw new NotFoundError('User', userId);
+    }
+
+    return user;
+  }
+
+  private deriveDisplayName(claims: SupabaseClaims, email: string): string {
+    return claims.user_metadata?.full_name
+      ?? claims.user_metadata?.name
+      ?? email.split('@')[0]
+      ?? 'Rovty User';
+  }
+
+  private deriveTenantName(claims: SupabaseClaims, email: string): string {
+    return claims.user_metadata?.tenantName
+      ?? claims.user_metadata?.workspaceName
+      ?? claims.user_metadata?.organizationName
+      ?? `${this.deriveDisplayName(claims, email)} Workspace`;
+  }
+
+  private deriveAvatarUrl(claims: SupabaseClaims): string | null {
+    return claims.user_metadata?.avatar_url
+      ?? claims.user_metadata?.picture
+      ?? null;
+  }
+
+  private async generateUniqueSlug(name: string): Promise<string> {
+    const base = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 40) || 'workspace';
+
+    let slug = base;
+    let suffix = 1;
+
+    while (await prisma.tenant.findUnique({ where: { slug } })) {
+      slug = `${base}-${suffix}`.slice(0, 50);
+      suffix += 1;
+    }
+
+    return slug;
+  }
+
+  private getPermissions(role: string): string[] {
+    return ROLE_PERMISSIONS[role] ?? ROLE_PERMISSIONS['VIEWER'] ?? [];
+  }
+
+  private mapProviderEnum(provider?: string): 'EMAIL' | 'GOOGLE' | 'MICROSOFT' | 'SSO' | 'OIDC' | 'SAML' | 'UNKNOWN' {
+    switch (provider) {
+      case 'google':
+        return 'GOOGLE';
+      case 'azure':
+        return 'MICROSOFT';
+      case 'email':
+        return 'EMAIL';
+      case 'sso':
+        return 'SSO';
+      case 'oidc':
+        return 'OIDC';
+      case 'saml':
+        return 'SAML';
+      default:
+        return 'UNKNOWN';
+    }
+  }
+
+  private mapProviderLabel(provider?: string): string {
+    switch (provider) {
+      case 'google':
+        return 'google';
+      case 'azure':
+        return 'microsoft';
+      case 'email':
+        return 'email';
+      case 'sso':
+      case 'oidc':
+      case 'saml':
+        return provider;
+      default:
+        return 'unknown';
+    }
+  }
+
+  private sanitizeUser(user: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    status: string;
+    avatarUrl: string | null;
+    lastLoginAt: Date | null;
+    createdAt: Date;
+  }) {
     return {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
-      status: user.status,
+      role: user.role as UserRole,
+      status: user.status as UserStatus,
       avatarUrl: user.avatarUrl,
       lastLoginAt: user.lastLoginAt,
       createdAt: user.createdAt,
     };
-  }
-
-  private generateSlug(name: string): string {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .substring(0, 50);
-  }
-
-  private parseExpiry(expiry: string): number {
-    const match = expiry.match(/^(\d+)([smhd])$/);
-    if (!match) return 7 * 24 * 60 * 60 * 1000; // 7 days default
-
-    const [, value, unit] = match;
-    const num = parseInt(value!, 10);
-    const multipliers: Record<string, number> = {
-      s: 1000,
-      m: 60 * 1000,
-      h: 60 * 60 * 1000,
-      d: 24 * 60 * 60 * 1000,
-    };
-    return num * (multipliers[unit!] || 1000);
   }
 }
 

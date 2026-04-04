@@ -1,3 +1,4 @@
+import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
@@ -45,5 +46,12 @@ describe('MessageInput', () => {
     await userEvent.click(lastBtn);
     // Nothing to clear, no crash
     expect(screen.getByPlaceholderText('Type a message…')).toHaveValue('');
+  });
+
+  it('renders a read-only state when replying is not allowed', () => {
+    render(<MessageInput conversationId="conv_1" readOnly />);
+
+    expect(screen.getByPlaceholderText('Read-only access')).toBeDisabled();
+    expect(screen.getByText(/only owners, admins, and agents can reply/i)).toBeInTheDocument();
   });
 });

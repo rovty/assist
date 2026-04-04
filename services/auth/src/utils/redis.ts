@@ -6,9 +6,11 @@ import { env } from '../env.js';
 
 const logger = createLogger('auth-redis');
 
-export const redis = new Redis(env.REDIS_URL, {
+const RedisClient = Redis as unknown as new (...args: any[]) => any;
+
+export const redis = new RedisClient(env.REDIS_URL, {
   maxRetriesPerRequest: 3,
-  retryStrategy(times) {
+  retryStrategy(times: number) {
     const delay = Math.min(times * 50, 2000);
     return delay;
   },
@@ -16,7 +18,7 @@ export const redis = new Redis(env.REDIS_URL, {
 });
 
 redis.on('connect', () => logger.info('Connected to Redis'));
-redis.on('error', (err) => logger.error(err, 'Redis connection error'));
+redis.on('error', (err: unknown) => logger.error(err, 'Redis connection error'));
 
 export async function connectRedis() {
   try {

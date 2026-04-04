@@ -1,10 +1,24 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Button, Badge } from '@assist/ui';
+
+import { AccessDeniedState } from '@/components/auth/access-denied-state';
 import { PlanCards } from '@/components/billing/plan-cards';
 import { UsageMeter } from '@/components/billing/usage-meter';
+import { useAuthorization } from '@/hooks/use-authorization';
 
 export default function BillingPage() {
+  const { can } = useAuthorization();
+
+  if (!can('billing:view')) {
+    return (
+      <AccessDeniedState
+        title="Billing access is restricted"
+        description="Only workspace owners can open billing and subscription controls."
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -24,7 +38,7 @@ export default function BillingPage() {
           <UsageMeter />
         </CardContent>
         <CardFooter>
-          <Button variant="outline">Manage Subscription</Button>
+          <Button variant="outline" disabled={!can('billing:manage')}>Manage Subscription</Button>
         </CardFooter>
       </Card>
 

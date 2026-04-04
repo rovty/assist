@@ -26,63 +26,48 @@ export async function analyticsRoutes(app: FastifyInstance) {
   app.addHook('onRequest', authMiddleware);
 
   /* ── Dashboard Overview ─────────────────────────────────── */
-  app.get('/overview', {
-    schema: { querystring: overviewQuerySchema.shape.querystring },
-    handler: async (request, reply) => {
-      const period = request.query as any;
-      const { tenantId } = request.tenantContext!;
+  app.get('/overview', async (request, reply) => {
+    const period = overviewQuerySchema.shape.querystring.parse(request.query);
+    const { tenantId } = request.tenantContext!;
 
-      const overview = await getOverview(tenantId, period);
-      return reply.send(overview);
-    },
+    const overview = await getOverview(tenantId, period);
+    return reply.send(overview);
   });
 
   /* ── Conversation Metrics ───────────────────────────────── */
-  app.get('/conversations', {
-    schema: { querystring: conversationMetricsSchema.shape.querystring },
-    handler: async (request, reply) => {
-      const period = request.query as any;
-      const { tenantId } = request.tenantContext!;
+  app.get('/conversations', async (request, reply) => {
+    const period = conversationMetricsSchema.shape.querystring.parse(request.query);
+    const { tenantId } = request.tenantContext!;
 
-      const metrics = await getConversationMetrics(tenantId, period);
-      return reply.send({ data: metrics });
-    },
+    const metrics = await getConversationMetrics(tenantId, period);
+    return reply.send({ data: metrics });
   });
 
   /* ── Agent Performance ──────────────────────────────────── */
-  app.get('/agents', {
-    schema: { querystring: agentMetricsSchema.shape.querystring },
-    handler: async (request, reply) => {
-      const period = request.query as any;
-      const { tenantId } = request.tenantContext!;
+  app.get('/agents', async (request, reply) => {
+    const period = agentMetricsSchema.shape.querystring.parse(request.query);
+    const { tenantId } = request.tenantContext!;
 
-      const metrics = await getAgentMetrics(tenantId, period);
-      return reply.send({ data: metrics });
-    },
+    const metrics = await getAgentMetrics(tenantId, period);
+    return reply.send({ data: metrics });
   });
 
   /* ── AI Metrics ─────────────────────────────────────────── */
-  app.get('/ai', {
-    schema: { querystring: aiMetricsSchema.shape.querystring },
-    handler: async (request, reply) => {
-      const period = request.query as any;
-      const { tenantId } = request.tenantContext!;
+  app.get('/ai', async (request, reply) => {
+    const period = aiMetricsSchema.shape.querystring.parse(request.query);
+    const { tenantId } = request.tenantContext!;
 
-      const metrics = await getAiMetrics(tenantId, period);
-      return reply.send({ data: metrics });
-    },
+    const metrics = await getAiMetrics(tenantId, period);
+    return reply.send({ data: metrics });
   });
 
   /* ── Channel Metrics ────────────────────────────────────── */
-  app.get('/channels', {
-    schema: { querystring: channelMetricsSchema.shape.querystring },
-    handler: async (request, reply) => {
-      const period = request.query as any;
-      const { tenantId } = request.tenantContext!;
+  app.get('/channels', async (request, reply) => {
+    const period = channelMetricsSchema.shape.querystring.parse(request.query);
+    const { tenantId } = request.tenantContext!;
 
-      const metrics = await getChannelMetrics(tenantId, period);
-      return reply.send({ data: metrics });
-    },
+    const metrics = await getChannelMetrics(tenantId, period);
+    return reply.send({ data: metrics });
   });
 
   /* ── Track Event ────────────────────────────────────────── */

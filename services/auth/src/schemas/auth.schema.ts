@@ -23,6 +23,10 @@ export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1),
 });
 
+export const accessTokenSchema = z.object({
+  token: z.string().min(1),
+});
+
 export const forgotPasswordSchema = z.object({
   email: z.string().email(),
 });
@@ -48,6 +52,7 @@ export const changePasswordSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
+export type AccessTokenInput = z.infer<typeof accessTokenSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

@@ -1,41 +1,41 @@
 import type { FastifyInstance } from 'fastify';
 
-import { success } from '@assist/shared-utils';
+import { BadRequestError, success } from '@assist/shared-utils';
 
 import { authService } from '../services/auth.service.js';
-import { registerSchema, loginSchema, refreshTokenSchema, changePasswordSchema } from '../schemas/auth.schema.js';
+import { accessTokenSchema } from '../schemas/auth.schema.js';
 import { authenticate } from '../middleware/auth.js';
 
+const LEGACY_AUTH_MESSAGE = 'Dashboard authentication has moved to Supabase Auth. Use Supabase sign-in/sign-up flows instead of this endpoint.';
+const LEGACY_PASSWORD_MESSAGE = 'Password management now belongs to Supabase Auth. Use the Supabase password or magic-link flows instead of this endpoint.';
+
 export async function authRoutes(app: FastifyInstance) {
-  // ─── POST /auth/register ───
-  app.post('/register', async (request, reply) => {
-    const body = registerSchema.parse(request.body);
-    const result = await authService.register(body);
-    return reply.status(201).send(success(result));
-  });
-
-  // ─── POST /auth/login ───
-  app.post('/login', async (request, reply) => {
-    const body = loginSchema.parse(request.body);
-    const result = await authService.login(body, {
-      ip: request.ip,
-      userAgent: request.headers['user-agent'],
-    });
+  // ─── POST /auth/context ───
+  // Gateway-facing endpoint that validates a Supabase access token
+  // and resolves the app-specific tenant + role context.
+  app.post('/context', async (request, reply) => {
+    const { token } = accessTokenSchema.parse(request.body);
+    const result = await authService.resolveAuthContext(token);
     return reply.send(success(result));
   });
 
-  // ─── POST /auth/refresh ───
-  app.post('/refresh', async (request, reply) => {
-    const body = refreshTokenSchema.parse(request.body);
-    const result = await authService.refreshAccessToken(body.refreshToken);
-    return reply.send(success(result));
+  // ─── Deprecated local auth endpoints ───
+  app.post('/register', async () => {
+    throw new BadRequestError(LEGACY_AUTH_MESSAGE);
+  });
+
+  app.post('/login', async () => {
+    throw new BadRequestError(LEGACY_AUTH_MESSAGE);
+  });
+
+  app.post('/refresh', async () => {
+    throw new BadRequestError(LEGACY_AUTH_MESSAGE);
   });
 
   // ─── POST /auth/logout ───
   app.post('/logout', { preHandler: [authenticate] }, async (request, reply) => {
-    const { refreshToken } = request.body as { refreshToken?: string };
     const accessToken = request.headers.authorization?.slice(7);
-    await authService.logout(request.user!.sub, refreshToken, accessToken);
+    await authService.logout(request.user!.sub, accessToken);
     return reply.send(success({ message: 'Logged out successfully' }));
   });
 
@@ -46,17 +46,15 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ─── POST /auth/change-password ───
-  app.post('/change-password', { preHandler: [authenticate] }, async (request, reply) => {
-    const body = changePasswordSchema.parse(request.body);
-    await authService.changePassword(request.user!.sub, body.currentPassword, body.newPassword);
-    return reply.send(success({ message: 'Password changed successfully' }));
+  app.post('/change-password', { preHandler: [authenticate] }, async () => {
+    throw new BadRequestError(LEGACY_PASSWORD_MESSAGE);
   });
 
   // ─── POST /auth/verify-token ───
-  // Internal endpoint for API Gateway to verify tokens
+  // Backwards-compatible alias for systems that still call the older name.
   app.post('/verify-token', async (request, reply) => {
-    const { token } = request.body as { token: string };
-    const payload = await authService.verifyAccessToken(token);
+    const { token } = accessTokenSchema.parse(request.body);
+    const payload = await authService.resolveAuthContext(token);
     return reply.send(success(payload));
   });
 }

@@ -3,7 +3,7 @@ import { baseEnvSchema, loadEnv } from '@assist/shared-utils';
 
 const envSchema = baseEnvSchema.extend({
   PORT: z.coerce.number().default(3000),
-  JWT_SECRET: z.string().min(32),
+  JWT_SECRET: z.string().min(32).default('legacy-jwt-secret-no-longer-used-000'),
   REDIS_URL: z.string(),
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   AUTH_SERVICE_URL: z.string().url().default('http://localhost:3001'),

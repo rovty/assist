@@ -13,17 +13,17 @@ export interface User {
 }
 
 export enum UserRole {
-  OWNER = 'owner',
-  ADMIN = 'admin',
-  AGENT = 'agent',
-  VIEWER = 'viewer',
+  OWNER = 'OWNER',
+  ADMIN = 'ADMIN',
+  AGENT = 'AGENT',
+  VIEWER = 'VIEWER',
 }
 
 export enum UserStatus {
-  ACTIVE = 'active',
-  INACTIVE = 'inactive',
-  PENDING = 'pending',
-  SUSPENDED = 'suspended',
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  PENDING = 'PENDING',
+  SUSPENDED = 'SUSPENDED',
 }
 
 export interface JwtPayload {
@@ -31,6 +31,9 @@ export interface JwtPayload {
   tenantId: string;
   email: string;
   role: UserRole;
+  supabaseUserId?: string;
+  provider?: string;
+  permissions?: string[];
   iat: number;
   exp: number;
 }

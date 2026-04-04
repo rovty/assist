@@ -1,3 +1,5 @@
+import { getSupabaseClient } from './supabase';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 interface RequestOptions extends Omit<RequestInit, 'body'> {
@@ -6,7 +8,10 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<{ data: T }> {
   const { body, headers: customHeaders, ...rest } = options;
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const session = typeof window !== 'undefined'
+    ? await getSupabaseClient().auth.getSession()
+    : { data: { session: null } };
+  const token = session.data.session?.access_token ?? null;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

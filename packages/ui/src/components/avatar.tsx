@@ -9,17 +9,19 @@ const avatarSizes = {
 };
 
 interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
+  name?: string;
   src?: string;
   alt?: string;
   fallback?: string;
   size?: keyof typeof avatarSizes;
 }
 
-function Avatar({ className, src, alt, fallback, size = 'md', ...props }: AvatarProps) {
+function Avatar({ className, name, src, alt, fallback, size = 'md', ...props }: AvatarProps) {
   const [imageError, setImageError] = React.useState(false);
+  const fallbackText = fallback ?? name;
 
-  const initials = fallback
-    ? fallback
+  const initials = fallbackText
+    ? fallbackText
         .split(' ')
         .map((n) => n[0])
         .join('')
@@ -39,8 +41,8 @@ function Avatar({ className, src, alt, fallback, size = 'md', ...props }: Avatar
       {src && !imageError ? (
         <img
           src={src}
-          alt={alt ?? fallback ?? ''}
-          className="aspect-square h-full w-full object-cover"
+          alt={alt ?? fallbackText ?? ''}
+          className="block h-full w-full object-cover object-center"
           onError={() => setImageError(true)}
         />
       ) : (
